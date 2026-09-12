@@ -2,6 +2,8 @@
 #include "engine/EmojiCatalog.h"
 #include "engine/FontCatalog.h"
 #include "engine/HwAccel.h"
+#include "engine/NativePluginManager.h"
+#include "engine/ProjectBackupManager.h"
 #include "engine/ReverseProxyCache.h"
 #ifndef Q_OS_ANDROID
 #include "HeadlessApp.h"
@@ -519,6 +521,8 @@ int main(int argc, char *argv[])
     static UpdateChecker updateChecker;
     static LayoutStore layoutStore;
     static drift::Haptics haptics;
+    static NativePluginManager nativePluginManager;
+    static ProjectBackupManager projectBackupManager;
     editorState.setAddonManager(&addonManager);
     marketClient.setAssetLibrary(&assetLibrary);
     editorState.setMarketClient(&marketClient);
@@ -532,6 +536,8 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("Drift", 1, 0, "Updates", &updateChecker);
     qmlRegisterSingletonInstance("Drift", 1, 0, "LayoutMemory", &layoutStore);
     qmlRegisterSingletonInstance("Drift", 1, 0, "Haptics", &haptics);
+    qmlRegisterSingletonInstance("Drift", 1, 0, "NativePlugins", &nativePluginManager);
+    qmlRegisterSingletonInstance("Drift", 1, 0, "ProjectBackups", &projectBackupManager);
 
     app.installEventFilter(new FileOpenFilter(&editorState, &marketClient, &app));
     {
@@ -582,6 +588,18 @@ int main(int argc, char *argv[])
         shellPreference = QStringLiteral("auto");
 
     engine.setInitialProperties({{QStringLiteral("shellPreference"), shellPreference}});
+
+    // Native community plugins load here: after the QML engine and every host singleton exist
+    // (so a plugin's init() can register its own QML types and reach AppController), but before
+    // Shell.qml is loaded (so those types are available the moment QML needs them). A project
+    // opened at startup hasn't been read into memory yet at this point, so there's nothing to
+    // back up on cold start; the "snapshot before touching plugins" step lives in the Settings
+    // QML instead, run right before ProjectBackups/NativePlugins.setPluginEnabled() when the user
+    // flips a plugin on mid-session.
+#ifndef Q_OS_ANDROID
+    nativePluginManager.loadEnabledPlugins(&editorState, &engine);
+#endif
+
     engine.loadFromModule("Drift", "Shell");
 
     return app.exec();

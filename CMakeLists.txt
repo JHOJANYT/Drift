@@ -511,6 +511,11 @@ add_library(driftengine STATIC
     src/engine/AddonRegistry.h
     src/engine/AddonRegistry.cpp
     src/engine/AddonSigningKey.h
+    src/engine/DriftPluginInterface.h
+    src/engine/NativePluginManager.h
+    src/engine/NativePluginManager.cpp
+    src/engine/ProjectBackupManager.h
+    src/engine/ProjectBackupManager.cpp
     src/engine/AndroidUri.h
     src/engine/AndroidUri.cpp
     src/engine/HwAccel.h
