@@ -126,6 +126,11 @@ Item {
             readonly property bool selected: EditorState.selectedTrack === modelData.track
                                              && EditorState.selectedClip === modelData.clip
             readonly property bool isText: modelData.kind === "text"
+            // A 3D model: the box is the projected model, not the clip's layout rect, so a drag
+            // moves the clip anchor by the box delta and there is nothing to resize or spin.
+            readonly property bool isModel3d: modelData.kind === "model3d"
+            readonly property real anchorOffsetX: modelData.anchorX !== undefined ? modelData.anchorX - modelData.x : 0
+            readonly property real anchorOffsetY: modelData.anchorY !== undefined ? modelData.anchorY - modelData.y : 0
             readonly property bool editing: root.editingKey
                                             === (modelData.track + ":" + modelData.clip)
             // True when this clip was just added with no text and should open
@@ -225,9 +230,12 @@ Item {
             width: Math.max(24, layoutW * sx)
             height: Math.max(24, layoutH * sy)
             // Front-most track (lowest index) sits on top so it wins tap
-            // hit-testing over boxes behind it. The clip being edited jumps above
-            // everything so its editor and the tap-away catcher order correctly.
-            z: handle.editing ? 1000 : -modelData.track
+            // hit-testing over boxes behind it. The clip selected on the timeline
+            // is raised above all of them, so a box that lies under a full-frame
+            // clip on an upper track is still the one the tap reaches. The clip
+            // being edited jumps above everything so its editor and the tap-away
+            // catcher order correctly.
+            z: handle.editing ? 1000 : handle.selected ? 900 : -modelData.track
             transformOrigin: Item.Center
             rotation: liveRotation < 1e8 ? liveRotation : modelData.rotation
 
@@ -340,10 +348,13 @@ Item {
             DragHandler {
                 id: bodyDrag
                 target: null
-                // Off while a grip is held: a handler on the parent item can
+                // Only the clip selected on the timeline moves: dragging a box
+                // that merely happens to be under the pointer used to shift the
+                // wrong clip, so an unselected box is tap-to-select only.
+                // Off while a grip is held too: a handler on the parent item can
                 // otherwise take the grab from the grip once the drag threshold
                 // is passed, turning a resize into a move.
-                enabled: !handle.editing && !handle.resizing
+                enabled: handle.selected && !handle.editing && !handle.resizing
                 onActiveChanged: {
                     if (active) {
                         root.interacting = true
@@ -389,9 +400,22 @@ Item {
                     EditorState.previewSetClipPosition(
                         handle.modelData.track,
                         handle.modelData.clip,
-                        xPx,
-                        yPx)
+                        xPx + handle.anchorOffsetX,
+                        yPx + handle.anchorOffsetY)
                 }
+            }
+
+            // The single move handle of a 3D model: an affordance at the box centre (the whole
+            // box drags), where the corner and rotation grips would otherwise invite resizing.
+            Rectangle {
+                visible: handle.selected && handle.isModel3d && !handle.editing
+                anchors.centerIn: parent
+                width: 18
+                height: 18
+                radius: 9
+                color: Theme.primary
+                border.width: Theme.borderWidth
+                border.color: Theme.onMedia
             }
 
             // Resize grips: 4 edges then 4 corners, the same frame the canvas crop
@@ -399,7 +423,7 @@ Item {
             // +1 = right/bottom, 0 = stays put). The opposite edge or corner is the
             // anchor and does not move.
             Repeater {
-                model: (handle.selected && !handle.editing)
+                model: (handle.selected && !handle.editing && !handle.isModel3d)
                        ? [
                            { dx: -1, dy:  0 },
                            { dx:  1, dy:  0 },
@@ -649,7 +673,7 @@ Item {
             // Rotation handle above the box.
             Item {
                 id: rotateGrip
-                visible: handle.selected && !handle.editing
+                visible: handle.selected && !handle.editing && !handle.isModel3d
                 width: root.gripTouch
                 height: root.gripTouch
                 x: handle.width / 2 - width / 2

@@ -6,7 +6,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Oldest macOS release Drift 
 
 # C is enabled for JUCE only: its modules compile a handful of C sources (zlib, flac, oggvorbis)
 # and its CMake refuses to configure without it.
-project(Drift VERSION 0.5.1 LANGUAGES CXX C)
+project(Drift VERSION 0.6.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -429,6 +429,8 @@ add_library(driftcore STATIC
     src/core/ShapePath.cpp
     src/core/VectorSource.h
     src/core/VectorSource.cpp
+    src/core/Model3dSource.h
+    src/core/Model3dSource.cpp
     src/core/ZipArchive.h
     src/core/ZipArchive.cpp
     src/core/DotLottie.h
@@ -622,6 +624,12 @@ add_library(driftengine STATIC
     src/engine/FaceTrack.cpp
     src/engine/FaceModelTransform.h
     src/engine/FaceModelTransform.cpp
+    src/engine/ModelAnimation.h
+    src/engine/ModelAnimation.cpp
+    src/engine/ModelClipTransform.h
+    src/engine/ModelClipTransform.cpp
+    src/engine/ModelClipRenderer.h
+    src/engine/ModelClipRenderer.cpp
     src/engine/FaceMesh.h
     src/engine/FaceMesh.cpp
     src/engine/ModelAsset.h
@@ -650,6 +658,10 @@ add_library(driftengine STATIC
     src/engine/ProjectBundle.cpp
     src/engine/ProjectDependencies.h
     src/engine/ProjectDependencies.cpp
+    src/engine/GpuPreference.h
+    src/engine/GpuPreference.cpp
+    src/engine/GpuDevice.h
+    src/engine/GpuDevice.cpp
 )
 target_include_directories(driftengine PUBLIC src)
 # cgltf is PRIVATE: ModelAsset.h exposes no cgltf type, so nothing outside ModelAsset.cpp includes it.
@@ -657,6 +669,15 @@ target_include_directories(driftengine SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_
 target_link_libraries(driftengine PUBLIC Qt6::Core Qt6::Gui Qt6::OpenGL FFmpeg::FFmpeg driftcore
     driftaudiodsp onnxruntime::headers)
 target_link_libraries(driftengine PRIVATE ${DRIFT_ZSTD_TARGET} OpenSSL::Crypto ${CMAKE_DL_LIBS})
+if(WIN32)
+    # Hybrid-graphics laptops: D3D11VA -> OpenGL preview interop, and DXGI adapter enumeration for
+    # the GPU preference and for opening D3D11VA on the GPU that renders.
+    target_sources(driftengine PRIVATE
+        src/engine/D3d11GlInterop.h
+        src/engine/D3d11GlInterop.cpp
+    )
+    target_link_libraries(driftengine PRIVATE d3d11 dxgi d3dcompiler opengl32)
+endif()
 target_compile_definitions(driftengine PRIVATE DRIFT_VERSION="${PROJECT_VERSION}")
 
 if(WITH_BGREMOVAL)
@@ -945,6 +966,7 @@ qt_add_qml_module(drift
         src/qml/components/properties/BlendingInspector.qml
         src/qml/components/properties/ShapeInspector.qml
         src/qml/components/properties/VectorInspector.qml
+        src/qml/components/properties/Model3DInspector.qml
         src/qml/components/properties/MasksInspector.qml
         src/qml/components/properties/EffectsInspector.qml
         src/qml/components/assets/TextAssetsTab.qml
@@ -1127,7 +1149,7 @@ if(ANDROID)
         "Launcher label")
     # versionName is PROJECT_VERSION — same string the desktop binary embeds as DRIFT_VERSION.
     # versionCode is the Play-Store integer; default tracks that semver so a desktop bump is an
-    # Android bump too (0.5.1 → 501). CI may override with -DDRIFT_ANDROID_VERSION_CODE=.
+    # Android bump too (0.6.0 → 600). CI may override with -DDRIFT_ANDROID_VERSION_CODE=.
     string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" _drift_android_ver "${PROJECT_VERSION}")
     if(_drift_android_ver)
         math(EXPR _drift_android_version_code_default

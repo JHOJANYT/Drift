@@ -283,7 +283,9 @@ GlTarget buildLayerTarget(GlRuntime &rt, QOpenGLExtraFunctions *gl, const GpuLay
         return {};
 
     GlTarget target;
-    if (layer.video.isValid()) {
+    if (layer.model3d) {
+        target = drift::gl::drawModelClip(rt, gl, *layer.model3d, canvasSize);
+    } else if (layer.video.isValid()) {
         target = promoteVideoFrameToTarget(rt, gl, layer.video);
     } else {
 #ifdef DRIFT_WITH_SKIA
@@ -1052,12 +1054,19 @@ QString previewUploadPathId()
         return QStringLiteral("vaapi-dmabuf");
     case GlRuntime::PreviewUploadPath::MediaCodecImage:
         return QStringLiteral("mediacodec-image");
+    case GlRuntime::PreviewUploadPath::D3d11Interop:
+        return QStringLiteral("d3d11-interop");
     case GlRuntime::PreviewUploadPath::CpuRoundTrip:
         return QStringLiteral("cpu-roundtrip");
     case GlRuntime::PreviewUploadPath::None:
         break;
     }
     return QStringLiteral("none");
+}
+
+QString zeroCopyDeclineReason()
+{
+    return GlRuntime::lastZeroCopyDeclineReason();
 }
 
 QImage render(const GpuScene &scene)

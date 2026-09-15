@@ -25,6 +25,9 @@ struct GpuEffectDefinition;
 namespace drift::skia {
 class VectorPainter;
 }
+namespace drift::model3d {
+struct ModelDrawRequest;
+}
 
 // A single textured layer: the clip's source pixels plus everything needed to
 // place it on the canvas. Prefer `video` when set (hardware frames stay on the
@@ -39,6 +42,8 @@ struct GpuLayer
     // the struct has one layout; without DRIFT_WITH_SKIA nothing ever sets it. When Skia cannot
     // draw it, `source` is the fallback if the builder filled one.
     std::shared_ptr<const drift::skia::VectorPainter> vector;
+    // A glTF model drawn by GlModelRenderer straight into a full-canvas layer target.
+    std::shared_ptr<const drift::model3d::ModelDrawRequest> model3d;
     QList<drift::Effect> effects;
     QList<drift::Mask> masks;
     // Index-parallel with `masks`: this frame's decoded coverage map for each Media entry, null
@@ -59,7 +64,10 @@ struct GpuLayer
     QList<drift::FaceAnchors> faceSlots;
     bool valid = false;
 
-    bool hasPixels() const { return video.isValid() || vector != nullptr || !source.isNull(); }
+    bool hasPixels() const
+    {
+        return video.isValid() || vector != nullptr || model3d != nullptr || !source.isNull();
+    }
 };
 
 // One drawable in the scene: either a plain layer, or a transition that mixes
@@ -135,10 +143,16 @@ bool isAvailable();
 drift::gl::GlStatusInfo status();
 
 // How the last preview video frame reached the GPU: "cuda-interop", "vaapi-dmabuf",
-// "cpu-roundtrip", or "none". A stable untranslated id, like drift::gl::statusId() — each
+// "d3d11-interop", "mediacodec-image", "cpu-roundtrip", or "none". A stable untranslated id, like drift::gl::statusId() — each
 // presentation site maps it to its own catalogue. Exposed here rather than from GlRuntime so
 // the playback layer can read it without pulling in the engine-private runtime header.
 QString previewUploadPathId();
+
+// Why a zero-copy importer turned the last preview frame down, in the importer's own words, or
+// empty when none was asked. Paired with previewUploadPathId(): "cpu-roundtrip" with a reason
+// is an importer declining, without one it is simply a frame no importer was offered. Exposed
+// here for the same reason as the id above.
+QString zeroCopyDeclineReason();
 
 // How many preview composites may be in flight at once. The presentation ring holds one
 // target per in-flight frame plus the one the scene graph is still sampling, so this is the
